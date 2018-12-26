@@ -1,0 +1,11 @@
+[package]
+name = "SSoZ"
+version = "0.1.0"
+authors = ["Vlad <vlad.mihai28@yahoo.com>"]
+edition = "2018"
+
+[dependencies]
+num = "*"
+bit-vec = "0.5.0"
+threadpool = "1.7.1"
+num_cpus = "1.9.0"
