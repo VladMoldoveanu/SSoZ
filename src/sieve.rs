@@ -6,167 +6,32 @@ use std::time::SystemTime;
 use threadpool::ThreadPool;
 use num_cpus;
 
-#[derive(Debug)]
-pub struct SSoZ {
-    p_cnt : usize,
-    num : u64,
-    twins_cnt : u64,
-    primes: Arc<Vec<u64>>,
-    kb : usize,
-    counts: Arc<Mutex<Vec<u64>>>,
-    last_twins: Arc<Mutex<Vec<u64>>>,
-    pos: Arc<Vec<u64>>,
-    modpg:     u64,
-    res_cnt:    usize,
-    pairs_cnt:  usize,
-    residues:  Vec<u64>,
-    res_twins: Vec<u64>,
-    res_inv:  Arc<Vec<u64>>,
-    bn:        u64,
-}
-
-impl SSoZ {
-    fn new() -> SSoZ {
-        SSoZ {
-            p_cnt: 0,
-            num: 0,
-            twins_cnt: 0,
-            primes: Arc::new(Vec::new()),
-            kb: 0,
-            counts: Arc::new(Mutex::new(Vec::new())),
-            last_twins: Arc::new(Mutex::new(Vec::new())),
-            pos: Arc::new(Vec::new()),
-            modpg: 0,
-            res_cnt: 0,
-            pairs_cnt: 0,
-            residues: Vec::new(),
-            res_twins: Vec::new(),
-            res_inv: Arc::new(Vec::new()),
-            bn: 0
-        }
-    }
-
-    fn select_pg(&mut self) {
-        if self.num < 10_000_000u64 {
-            self.modpg = PARAMETERS_P5.0;
-            self.res_cnt = PARAMETERS_P5.1;
-            self.pairs_cnt = PARAMETERS_P5.2;
-            self.residues = PARAMETERS_P5.3.to_vec();
-            self.res_twins = PARAMETERS_P5.4.to_vec();
-            self.res_inv = Arc::new(PARAMETERS_P5.5.to_vec());
-            self.bn = 16;
-        } else if self.num < 1_100_000_000u64 {
-            self.modpg = PARAMETERS_P7.0;
-            self.res_cnt = PARAMETERS_P7.1;
-            self.pairs_cnt = PARAMETERS_P7.2;
-            self.residues = PARAMETERS_P7.3.to_vec();
-            self.res_twins = PARAMETERS_P7.4.to_vec();
-            self.res_inv = Arc::new(PARAMETERS_P7.5.to_vec());
-            self.bn = 32;
-        } else if self.num < 35_500_000_000u64 {
-            self.modpg = PARAMETERS_P11.0;
-            self.res_cnt = PARAMETERS_P11.1;
-            self.pairs_cnt = PARAMETERS_P11.2;
-            self.residues = PARAMETERS_P11.3.to_vec();
-            self.res_twins = PARAMETERS_P11.4.to_vec();
-            self.res_inv = Arc::new(PARAMETERS_P11.5.to_vec());
-            self.bn = 64;
-        } else if self.num < 15_000_000_000_000u64 {
-            self.modpg = PARAMETERS_P13.0;
-            self.res_cnt = PARAMETERS_P13.1;
-            self.pairs_cnt = PARAMETERS_P13.2;
-            self.residues = PARAMETERS_P13.3.to_vec();
-            self.res_twins = PARAMETERS_P13.4.to_vec();
-            self.res_inv = Arc::new(PARAMETERS_P13.5.to_vec());
-            if self.num > 7_000_000_000_000u64 { self.bn = 384;}
-            else if self.num > 2_500_000_000_000u64 { self.bn = 320;}
-            else if self.num > 250_000_000_000u64 { self.bn = 384;}
-            else {self.bn = 96;}
-        } else {
-            self.modpg = PARAMETERS_P17.0;
-            self.res_cnt = PARAMETERS_P17.1;
-            self.pairs_cnt = PARAMETERS_P17.2;
-            self.residues = PARAMETERS_P17.3.to_vec();
-            self.res_twins = PARAMETERS_P17.4.to_vec();
-            self.res_inv = Arc::new(PARAMETERS_P17.5.to_vec());
-            self.bn = 384;
-        }
-        self.counts = Arc::new(Mutex::new(vec![0u64;self.pairs_cnt]));
-        self.last_twins = Arc::new(Mutex::new(vec![0u64;self.pairs_cnt]));
-        let mut pos = vec![0u64;self.modpg as usize];
-        for i in 0..self.res_cnt-1 {
-            pos[(self.residues[i] - 2) as usize] = i as u64;
-        }
-        self.pos = Arc::new(pos);
-    }
-    fn soz_pg(&mut self, val: u64) {
-        let md = self.modpg;
-        let res_cnt = self.res_cnt;
-
-        let num = (val - 1) | 1;
-        let mut k = num / md;
-        let mut mod_k = md * k;
-        let mut r = 0i128;
-
-        let mut prms = Vec::new();
-        while num >= mod_k + self.residues[r as usize] {
-            r += 1;
-        }
-        let max_pcs = k * (res_cnt as u64) + (r as u64);
-        let mut primes = BitVec::from_elem(max_pcs as usize, false);
-        let sqn = sqrt(num);
-
-        mod_k = 0; r = -1; k = 0;
-
-        for i in 0usize..max_pcs as usize {
-            if {r += 1; r} == res_cnt as i128 {
-                r = 0;
-                mod_k += md;
-                k += 1;
-            }
-            if primes[i] {continue;}
-            let pmr_r = self.residues[i];
-            let prime = mod_k + pmr_r;
-            if prime > sqn {break;}
-            let prm_step = prime * (res_cnt as u64);
-            for ri in &self.residues {
-                let prod = pmr_r * (*ri) - 2;
-                let mut prm_mult = (k * (prime + *ri) + prod / md) * (res_cnt as u64) + self.pos[(prod % md) as usize];
-                while prm_mult < max_pcs {
-                    primes.set(prm_mult as usize, true);
-                    prm_mult += prm_step;
-                }
-            }
-        }
-
-        mod_k = 0; r = -1;
-        for prm in primes {
-            if {r += 1; r} == res_cnt as i128{
-                r = 0;
-                mod_k += md;
-            }
-            if !prm {
-                prms.push(mod_k + self.residues[r as usize]);
-            }
-        }
-        self.primes = Arc::new(prms);
-        self.p_cnt = self.primes.len();
-    }
-}
-
 pub fn largest_twin_prime_before(max : u64) -> (u64, u64) {
-    let mut ssoz = SSoZ::new();
     let now = SystemTime::now();
-    let thread_pool = ThreadPool::new(num_cpus::get());
-    ssoz.num = (max - 1) | 1;
-    ssoz.select_pg();
-    let modpg = ssoz.modpg;
-    let _k = ssoz.num / modpg;
-    let k_max = (ssoz.num - 2) / modpg + 1;
-    let b = ssoz.bn * 1024;
-    ssoz.kb = (if k_max < b {k_max} else {b}) as usize;
 
-    ssoz.soz_pg(sqrt(ssoz.num));
+    //Initialize with precompiled data
+    let num = (max - 1) | 1;
+    let (modpg, res_cnt, pairs_cnt, bn
+        , residues, res_twins, res_inv) = select_pg(num);
+    let counts = Arc::new(Mutex::new(vec![0u64;pairs_cnt]));
+    let last_twins = Arc::new(Mutex::new(vec![0u64;pairs_cnt]));
+    let mut pos = vec![0u64;modpg as usize];
+    for i in 0..res_cnt-1 {
+        pos[(residues[i] - 2) as usize] = i as u64;
+    }
+    let pos = Arc::new(pos);
+
+
+    let thread_pool = ThreadPool::new(num_cpus::get());
+    let _k = num / modpg;
+    let k_max = (num - 2) / modpg + 1;
+    let b = bn << 10;
+    let kb = (if k_max < b {k_max} else {b}) as usize;
+    let mut twins_cnt = if modpg > 30030u64 {4u64} else if modpg > 210u64 {3u64} else {2u64};
+
+    let (primes, p_cnt) =
+        soz_pg(sqrt(num), modpg, res_cnt, &residues, pos.clone());
+
     println!("setup time: {}ms", {
         match now.elapsed() {
             Ok(elapsed) => {
@@ -176,34 +41,28 @@ pub fn largest_twin_prime_before(max : u64) -> (u64, u64) {
     });
 
 
-    ssoz.twins_cnt = if modpg > 30030u64 {4} else if modpg > 210u64 {3} else {2};
     let now = SystemTime::now();
+
     let mut index = 0usize;
-    while index < ssoz.pairs_cnt {
-        let k_max_0 = k_max.clone();
-        let index_0 = index.clone();
-        let kb = ssoz.kb;
-        let r_hi = ssoz.res_twins[index];
-        let modpg = ssoz.modpg;
-        let num = ssoz.num;
-        let p_cnt = ssoz.p_cnt;
-        let primes = ssoz.primes.clone();
-        let res_inv = ssoz.res_inv.clone();
-        let pos = ssoz.pos.clone();
-        let last_twins = ssoz.last_twins.clone();
-        let counts = ssoz.counts.clone();
+    while index < pairs_cnt {
+        let (k_max_0, index_0, kb_0, r_hi, modpg_0, num_0, p_cnt_0,
+            primes_0, res_inv_0, pos_0,
+            last_twins_0, counts_0) =
+            (k_max, index, kb, res_twins[index], modpg, num, p_cnt,
+             primes.clone(), res_inv.clone(), pos.clone(),
+             last_twins.clone(), counts.clone());
         thread_pool.execute(move || {
-            twin_sieve(k_max_0, index_0, kb, r_hi, modpg, num, p_cnt,
-                             primes, res_inv, pos, last_twins, counts);
+            twin_sieve(k_max_0, index_0, kb_0, r_hi, modpg_0, num_0, p_cnt_0,
+                             primes_0, res_inv_0, pos_0, last_twins_0, counts_0);
         });
         index += 1;
     }
     thread_pool.join();
-    let count = ssoz.counts.lock().unwrap();
+    let count = counts.lock().unwrap();
     for i in 0..count.len() {
-        ssoz.twins_cnt += count[i];
+        twins_cnt += count[i];
     }
-    let last_twins = ssoz.last_twins.lock().unwrap();
+    let last_twins = last_twins.lock().unwrap();
     let mut last = 0u64;
     for i in 0..last_twins.len() {
         if last < last_twins[i] {last = last_twins[i];}
@@ -215,7 +74,7 @@ pub fn largest_twin_prime_before(max : u64) -> (u64, u64) {
             Err(e) => {panic!("Timer error {:?}", e)},
         }
     });
-    (last, ssoz.twins_cnt)
+    (last, twins_cnt)
 }
 
 fn twin_sieve(k_max: u64, index: usize, kb: usize, r_hi: u64, modpg: u64, num: u64, p_cnt: usize,
@@ -281,8 +140,7 @@ fn twin_sieve(k_max: u64, index: usize, kb: usize, r_hi: u64, modpg: u64, num: u
 
 fn next_p_init(r_hi: u64, modpg: u64, primes: Arc<Vec<u64>>, p_cnt: usize,
                res_inv: Arc<Vec<u64>>, pos: Arc<Vec<u64>>) -> Vec<u64> {
-    let mut next_p = Vec::with_capacity(p_cnt * 2);
-    for i in 0..next_p.capacity() {next_p.push(0);}
+    let mut next_p = vec![0u64; p_cnt * 2];
     let r_lo = r_hi - 2;
     let (row_lo, row_hi) = (0usize, p_cnt);
     for i in 0..p_cnt {
@@ -296,4 +154,83 @@ fn next_p_init(r_hi: u64, modpg: u64, primes: Arc<Vec<u64>>, p_cnt: usize,
         next_p[row_hi + i] = k * (prime + ri) + (r * ri - 2) / modpg;
     }
     return next_p;
+}
+
+fn select_pg(num: u64) -> (u64, usize, usize, u64, Vec<u64>, Vec<u64>, Arc<Vec<u64>>) {
+    if num < 10_000_000u64 {
+         return (PARAMETERS_P5.0 , PARAMETERS_P5.1, PARAMETERS_P5.2, 16, PARAMETERS_P5.3.to_vec(),
+                 PARAMETERS_P5.4.to_vec(), Arc::new(PARAMETERS_P5.5.to_vec()));
+    }
+    if num < 1_100_000_000u64 {
+        return (PARAMETERS_P7.0 , PARAMETERS_P7.1, PARAMETERS_P7.2, 32, PARAMETERS_P7.3.to_vec(),
+                PARAMETERS_P7.4.to_vec(), Arc::new(PARAMETERS_P7.5.to_vec()));
+    }
+    if num < 35_500_000_000u64 {
+        return (PARAMETERS_P11.0 , PARAMETERS_P11.1, PARAMETERS_P11.2, 64, PARAMETERS_P11.3.to_vec(),
+                PARAMETERS_P11.4.to_vec(), Arc::new(PARAMETERS_P11.5.to_vec()));
+    }
+    if num < 15_000_000_000_000u64 {
+        let mut bn = 0u64;
+        if num > 7_000_000_000_000u64 { bn = 384;}
+        else if num > 2_500_000_000_000u64 { bn = 320;}
+        else if num > 250_000_000_000u64 { bn = 384;}
+        else {bn = 96;}
+        return (PARAMETERS_P13.0 , PARAMETERS_P13.1, PARAMETERS_P13.2, bn, PARAMETERS_P13.3.to_vec(),
+                PARAMETERS_P13.4.to_vec(), Arc::new(PARAMETERS_P13.5.to_vec()));
+    }
+    return (PARAMETERS_P17.0 , PARAMETERS_P17.1, PARAMETERS_P17.2, 384, PARAMETERS_P17.3.to_vec(),
+            PARAMETERS_P17.4.to_vec(), Arc::new(PARAMETERS_P17.5.to_vec()));
+}
+
+fn soz_pg(val: u64, md: u64, res_cnt: usize, residues: &Vec<u64>, pos: Arc<Vec<u64>>)
+    -> (Arc<Vec<u64>>, usize) {
+
+    let num = (val - 1) | 1;
+    let mut k = num / md;
+    let mut mod_k = md * k;
+    let mut r = 0i128;
+
+    let mut prms = Vec::new();
+    while num >= mod_k + residues[r as usize] {
+        r += 1;
+    }
+    let max_pcs = k * (res_cnt as u64) + (r as u64);
+    let mut primes = BitVec::from_elem(max_pcs as usize, false);
+    let sqn = sqrt(num);
+
+    mod_k = 0; r = -1; k = 0;
+
+    for i in 0usize..max_pcs as usize {
+        if {r += 1; r} == res_cnt as i128 {
+            r = 0;
+            mod_k += md;
+            k += 1;
+        }
+        if primes[i] {continue;}
+        let pmr_r = residues[i];
+        let prime = mod_k + pmr_r;
+        if prime > sqn {break;}
+        let prm_step = prime * (res_cnt as u64);
+        for ri in residues {
+            let prod = pmr_r * (*ri) - 2;
+            let mut prm_mult = (k * (prime + *ri) + prod / md) * (res_cnt as u64) + pos[(prod % md) as usize];
+            while prm_mult < max_pcs {
+                primes.set(prm_mult as usize, true);
+                prm_mult += prm_step;
+            }
+        }
+    }
+
+    mod_k = 0; r = -1;
+    for prm in primes {
+        if {r += 1; r} == res_cnt as i128{
+            r = 0;
+            mod_k += md;
+        }
+        if !prm {
+            prms.push(mod_k + residues[r as usize]);
+        }
+    }
+    let len = prms.len();
+    (Arc::new(prms), len)
 }

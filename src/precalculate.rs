@@ -54,6 +54,7 @@ pub fn gen_pg_parameters(prime: u64) -> String {
     while j < res_cnt - 1 {
         if residues[j] + 2 == residues[j + 1] {
             res_twins.push(residues[j + 1]);
+            j += 1;
         }
         j += 1;
     }
@@ -66,7 +67,7 @@ pub fn gen_pg_parameters(prime: u64) -> String {
     //The usual return value
     //(modpg, res_cnt as u64, twin_pairs as u64, residues, res_twins, inverses)
     let mut formatted = String::new();
-    formatted.push_str(&format!("pub static PARAMETERS_P{}: (u64, u64, u64, [u64;{}], [u64;{}], [u64;{}]) = ",
+    formatted.push_str(&format!("pub static PARAMETERS_P{}: (u64, usize, usize, [u64;{}], [u64;{}], [u64;{}]) = ",
                                         prime, res_cnt, twin_pairs, res_cnt));
     formatted.push_str(&format!("({}", modpg));
     formatted.push_str(&format!(", {}", res_cnt));
