@@ -7,7 +7,6 @@ mod precalculate;
 mod precalculated_values;
 pub mod sieve;
 
-
 #[cfg(test)]
 mod tests {
     use std::fs::File;

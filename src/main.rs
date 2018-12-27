@@ -1,6 +1,6 @@
 extern crate SSoZ;
-use SSoZ::SSoZ;
+use SSoZ::sieve::largest_twin_prime_before;
 
 fn main() {
-    SSoZ::largest_twin_prime(10000);
+    println!("{}", largest_twin_prime_before(300));
 }
