@@ -154,7 +154,7 @@ impl SSoZ {
     }
 }
 
-pub fn largest_twin_prime_before(max : u64) -> u64 {
+pub fn largest_twin_prime_before(max : u64) -> (u64, u64) {
     let mut ssoz = SSoZ::new();
     let now = SystemTime::now();
     let thread_pool = ThreadPool::new(num_cpus::get());
@@ -167,7 +167,7 @@ pub fn largest_twin_prime_before(max : u64) -> u64 {
     ssoz.kb = (if k_max < b {k_max} else {b}) as usize;
 
     ssoz.soz_pg(sqrt(ssoz.num));
-    println!("setup time: {}", {
+    println!("setup time: {}ms", {
         match now.elapsed() {
             Ok(elapsed) => {
                 (elapsed.as_secs() * 1000) as f64 + elapsed.subsec_nanos() as f64 / 1_000_000f64},
@@ -175,7 +175,6 @@ pub fn largest_twin_prime_before(max : u64) -> u64 {
         }
     });
 
-    println!("{:?}", ssoz);
 
     ssoz.twins_cnt = if modpg > 30030u64 {4} else if modpg > 210u64 {3} else {2};
     let now = SystemTime::now();
@@ -208,16 +207,15 @@ pub fn largest_twin_prime_before(max : u64) -> u64 {
     let mut last = 0u64;
     for i in 0..last_twins.len() {
         if last < last_twins[i] {last = last_twins[i];}
-        print!("{} ", last_twins[i]);
     }
-    println!("sieve time: {}", {
+    println!("sieve time: {}ms", {
         match now.elapsed() {
             Ok(elapsed) => {
                 (elapsed.as_secs() * 1000) as f64 + elapsed.subsec_nanos() as f64 / 1_000_000f64},
             Err(e) => {panic!("Timer error {:?}", e)},
         }
     });
-    last
+    (last, ssoz.twins_cnt)
 }
 
 fn twin_sieve(k_max: u64, index: usize, kb: usize, r_hi: u64, modpg: u64, num: u64, p_cnt: usize,
