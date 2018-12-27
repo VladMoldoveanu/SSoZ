@@ -1,7 +1,7 @@
 extern crate num;
-extern crate bit_vec;
 extern crate threadpool;
 extern crate num_cpus;
+extern crate memsec;
 
 mod precalculate;
 mod precalculated_values;
@@ -18,7 +18,7 @@ mod tests {
             Ok(f) => {f},
             Err(_) => {panic!("Could not create file")},
         };
-        match file.write_all(gen_pg_parameters(17).as_bytes()) {
+        match file.write_all(gen_pg_parameters(5).as_bytes()) {
             Ok(_) => {println!("Done 5");},
             Err(_) => {panic!("Could not write to file");},
         }
