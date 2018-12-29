@@ -7,5 +7,6 @@ edition = "2018"
 [dependencies]
 num = "*"
 memsec = "0.5.4"
+rayon = "1.0.3"
 threadpool = "1.7.1"
 num_cpus = "1.9.0"

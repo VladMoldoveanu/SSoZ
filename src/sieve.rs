@@ -16,7 +16,7 @@ pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
     let counts = Arc::new(Mutex::new(vec![0usize;pairs_cnt]));
     let last_twins = Arc::new(Mutex::new(vec![0usize;pairs_cnt]));
     let mut pos = vec![0usize; modpg];
-    for i in 0..res_cnt { //Bug in previous version: was 0..res_cnt-1
+    for i in 0..res_cnt {
         pos[residues[i] - 2] = i;
     }
     let pos = Arc::new(pos);
@@ -83,7 +83,6 @@ fn twin_sieve(k_max: usize, index: usize, kb: usize, r_hi: usize, modpg: usize, 
     let (mut sum, mut ki) = (0usize, 0usize);
     let (mut hi_tp, mut upk) = (0usize, 0usize);
     let mut k_hi = 0usize;
-    let mut last_tw = 0usize;
     let mut seg: Vec<u8> = vec![0u8;kb];
     let mut next_p =
         next_p_init(r_hi, modpg, primes.clone(),p_cnt, res_inv.clone(), pos.clone());
@@ -125,19 +124,21 @@ fn twin_sieve(k_max: usize, index: usize, kb: usize, r_hi: usize, modpg: usize, 
         }
         ki += kb;
     }
-    let mut mod_k = hi_tp * modpg;
-    if mod_k + r_hi > num {
+    hi_tp = hi_tp * modpg + r_hi;
+    if hi_tp > num {
+        let mut prev = true;
         for k in 0..upk + 1 {
             if seg[upk - k] == 0 {
-                hi_tp = mod_k + r_hi;
-                if hi_tp <= num {break;} //Here was {last_tw = hi_tp; break} - probably bug since value not used
+                if hi_tp <= num {prev = false; break;}
                 sum -= 1;
             }
-            mod_k -= modpg;
+            hi_tp -= modpg;
         }
-        last_tw = if r_hi > num {0usize} else {k_hi * modpg + r_hi};
-    } else {last_tw = mod_k + r_hi}
-    last_twins.lock().unwrap()[index] = last_tw;
+        if prev {
+            hi_tp = if r_hi > num {0usize} else {k_hi * modpg + r_hi};
+        }
+    }
+    last_twins.lock().unwrap()[index] = hi_tp;
     count.lock().unwrap()[index] = sum;
 }
 
@@ -172,11 +173,10 @@ fn select_pg(num: usize) -> (usize, usize, usize, usize, Vec<usize>, Vec<usize>,
                 PARAMETERS_P11.4.to_vec(), Arc::new(PARAMETERS_P11.5.to_vec()));
     }
     if num < 15_000_000_000_000usize {
-        let mut bn = 0usize;
-        if num > 7_000_000_000_000usize { bn = 384;}
-        else if num > 2_500_000_000_000usize { bn = 320;}
-        else if num > 250_000_000_000usize { bn = 196;}
-        else {bn = 96;}
+        let mut bn = {if num > 7_000_000_000_000usize {384}
+        else if num > 2_500_000_000_000usize {320}
+        else if num > 250_000_000_000usize {196}
+        else {96} };
         return (PARAMETERS_P13.0 , PARAMETERS_P13.1, PARAMETERS_P13.2, bn, PARAMETERS_P13.3.to_vec(),
                 PARAMETERS_P13.4.to_vec(), Arc::new(PARAMETERS_P13.5.to_vec()));
     }

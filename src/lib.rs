@@ -2,6 +2,7 @@ extern crate num;
 extern crate threadpool;
 extern crate num_cpus;
 extern crate memsec;
+extern crate rayon;
 
 mod precalculate;
 mod precalculated_values;
