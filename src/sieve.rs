@@ -3,7 +3,7 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 use num::integer::sqrt;
 use std::time::SystemTime;
-use memsec::memset;
+use memsec::memzero;
 
 pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
     let now = SystemTime::now();
@@ -18,7 +18,6 @@ pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
     }
     let pos = Arc::new(pos);
 
-    let _k = num / modpg;
     let k_max = (num - 2) / modpg + 1;
     let b = bn << 10;
     let kb = if k_max < b {k_max} else {b};
@@ -71,17 +70,16 @@ fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_
     let (mut sum, mut ki) = (0usize, 0usize);
     let (mut hi_tp, mut upk) = (0usize, 0usize);
     let mut k_hi = 0usize;
-    let mut seg: Vec<u8> = vec![0u8;kb];
+    let mut seg= vec![0u8;kb];
     let mut next_p =
         next_p_init(r_hi, modpg, primes.clone(),p_cnt, res_inv.clone(), pos.clone());
 
     while ki < k_max {
         let kn = {if kb < (k_max - ki) {kb} else {k_max - ki}};
         unsafe {
-            memset(seg.as_mut_ptr(), 0, kn);
+            memzero(seg.as_mut_ptr(), kn);
         }
-        //for b in 0..kn {seg[b] = 0;}
-        for (i, prime) in primes.iter().enumerate() {
+        for (i, &prime) in primes.iter().enumerate() {
             let mut k = next_p[i];
             while k < kn {
                 seg[k] |= 1;
@@ -96,6 +94,7 @@ fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_
             }
             next_p[i + p_cnt] = k - kn;
         }
+
         let mut cnt = 0usize;
         seg.iter().take(kn).for_each(|&x| if x == 0 {cnt += 1});
 
