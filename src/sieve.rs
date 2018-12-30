@@ -1,9 +1,8 @@
 use super::precalculated_values::*;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, mpsc};
+use std::thread;
 use num::integer::sqrt;
 use std::time::SystemTime;
-use threadpool::ThreadPool;
-use num_cpus;
 use memsec::memset;
 
 pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
@@ -13,16 +12,12 @@ pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
     let num = (max - 1) | 1;
     let (modpg, res_cnt, pairs_cnt, bn
         , residues, res_twins, res_inv) = select_pg(num);
-    let counts = Arc::new(Mutex::new(vec![0usize;pairs_cnt]));
-    let last_twins = Arc::new(Mutex::new(vec![0usize;pairs_cnt]));
     let mut pos = vec![0usize; modpg];
     for i in 0..res_cnt {
         pos[residues[i] - 2] = i;
     }
     let pos = Arc::new(pos);
 
-
-    let thread_pool = ThreadPool::new(num_cpus::get());
     let _k = num / modpg;
     let k_max = (num - 2) / modpg + 1;
     let b = bn << 10;
@@ -42,30 +37,24 @@ pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
 
 
     let now = SystemTime::now();
+    let (sender, receiver) = mpsc::channel();
 
-    let mut index = 0usize;
-    while index < pairs_cnt {
-        let (k_max_0, index_0, kb_0, r_hi, modpg_0, num_0, p_cnt_0,
-            primes_0, res_inv_0, pos_0,
-            last_twins_0, counts_0) =
-            (k_max, index, kb, res_twins[index], modpg, num, p_cnt,
-             primes.clone(), res_inv.clone(), pos.clone(),
-             last_twins.clone(), counts.clone());
-        thread_pool.execute(move || {
-            twin_sieve(k_max_0, index_0, kb_0, r_hi, modpg_0, num_0, p_cnt_0,
-                             primes_0, res_inv_0, pos_0, last_twins_0, counts_0);
+    for index in 0..pairs_cnt {
+        let (k_max_0, kb_0, r_hi, modpg_0, num_0, p_cnt_0,
+            primes_0, res_inv_0, pos_0, sender_0) =
+            (k_max, kb, res_twins[index], modpg, num, p_cnt,
+             primes.clone(), res_inv.clone(), pos.clone(), sender.clone());
+        thread::spawn(move || {
+            sender_0.send(twin_sieve(k_max_0, kb_0, r_hi, modpg_0,
+                             num_0, p_cnt_0, primes_0, res_inv_0, pos_0))
+                .expect("Unable to send to channel");
         });
-        index += 1;
     }
-    thread_pool.join();
-    let count = counts.lock().unwrap();
-    for i in 0..count.len() {
-        twins_cnt += count[i];
-    }
-    let last_twins = last_twins.lock().unwrap();
     let mut last = 0usize;
-    for i in 0..last_twins.len() {
-        if last < last_twins[i] {last = last_twins[i];}
+    for _ in 0..pairs_cnt {
+        let (l, c) = receiver.recv().expect("Unable to receive from channel");
+        twins_cnt += c;
+        if l > last {last = l;}
     }
     println!("sieve time: {}ms", {
         match now.elapsed() {
@@ -77,9 +66,8 @@ pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
     (last, twins_cnt)
 }
 
-fn twin_sieve(k_max: usize, index: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_cnt: usize,
-              primes: Arc<Vec<usize>>, res_inv: Arc<Vec<usize>>, pos: Arc<Vec<usize>>,
-              last_twins: Arc<Mutex<Vec<usize>>>, count: Arc<Mutex<Vec<usize>>>) {
+fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_cnt: usize,
+              primes: Arc<Vec<usize>>, res_inv: Arc<Vec<usize>>, pos: Arc<Vec<usize>>) -> (usize, usize) {
     let (mut sum, mut ki) = (0usize, 0usize);
     let (mut hi_tp, mut upk) = (0usize, 0usize);
     let mut k_hi = 0usize;
@@ -138,8 +126,7 @@ fn twin_sieve(k_max: usize, index: usize, kb: usize, r_hi: usize, modpg: usize, 
             hi_tp = if r_hi > num {0usize} else {k_hi * modpg + r_hi};
         }
     }
-    last_twins.lock().unwrap()[index] = hi_tp;
-    count.lock().unwrap()[index] = sum;
+    (hi_tp, sum)
 }
 
 fn next_p_init(r_hi: usize, modpg: usize, primes: Arc<Vec<usize>>, p_cnt: usize,
@@ -173,7 +160,7 @@ fn select_pg(num: usize) -> (usize, usize, usize, usize, Vec<usize>, Vec<usize>,
                 PARAMETERS_P11.4.to_vec(), Arc::new(PARAMETERS_P11.5.to_vec()));
     }
     if num < 15_000_000_000_000usize {
-        let mut bn = {if num > 7_000_000_000_000usize {384}
+        let bn = {if num > 7_000_000_000_000usize {384}
         else if num > 2_500_000_000_000usize {320}
         else if num > 250_000_000_000usize {196}
         else {96} };

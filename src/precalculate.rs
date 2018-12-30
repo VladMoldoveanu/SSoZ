@@ -1,7 +1,7 @@
 use num::integer::gcd;
 use std::mem::swap;
 
-fn mod_inverse(a0 : u64, b0: u64) -> u64 {
+fn _mod_inverse(a0 : u64, b0: u64) -> u64 {
     if b0 == 1 {
         return 1;
     }
@@ -22,7 +22,7 @@ fn mod_inverse(a0 : u64, b0: u64) -> u64 {
     }
     return result as u64;
 }
-pub fn gen_pg_parameters(prime: u64) -> String {
+pub fn _gen_pg_parameters(prime: u64) -> String {
     println!("Generating pg parameters for prime: {}", prime);
     let primes = vec![2u64, 3, 5, 7, 11, 13, 17, 19, 23];
     let mut modpg = 1u64;
@@ -62,7 +62,7 @@ pub fn gen_pg_parameters(prime: u64) -> String {
 
     let mut inverses : Vec<u64> = vec![];
     for res in &residues {
-        inverses.push(mod_inverse(*res, modpg));
+        inverses.push(_mod_inverse(*res, modpg));
     }
     //The usual return value
     //(modpg, res_cnt as u64, twin_pairs as u64, residues, res_twins, inverses)
