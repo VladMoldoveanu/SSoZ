@@ -1,6 +1,6 @@
 # SSoZ
 This is an implementation of the Twin Prime Segmented Sieve of Zakiya (SSoZ). 
-You can find the thread with the discussions, as well the paper about the algorithm and a Nim implementation here: https://users.rust-lang.org/t/a-friendly-challenge-for-rust/23197
+You can find the thread with the discussions, as well as the paper about the algorithm and a Nim implementation here: https://users.rust-lang.org/t/a-friendly-challenge-for-rust/23197
 
 This is mostly a translation of the NIM code with a few tweaks. If you have any ideas for further optimisations, let me know.
 
