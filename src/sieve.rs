@@ -154,7 +154,7 @@ fn next_p_init(r_hi: usize, modpg: usize, primes: Arc<Vec<usize>>, p_cnt: usize,
 
 //Selects the desired precompiled data which matches the sieve limit
 fn select_pg(num: usize) -> (usize, usize, usize, usize, Vec<usize>, Vec<usize>, Arc<Vec<usize>>) {
-    if num < 10_000_000usize {
+    if num < 100_000usize {
          return (PARAMETERS_P5.0 , PARAMETERS_P5.1, PARAMETERS_P5.2, 16, PARAMETERS_P5.3.to_vec(),
                  PARAMETERS_P5.4.to_vec(), Arc::new(PARAMETERS_P5.5.to_vec()));
     }
