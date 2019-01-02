@@ -2,11 +2,10 @@ use super::precalculated_values::*;
 use std::sync::{Arc, mpsc};
 use std::thread;
 use num::integer::sqrt;
-use std::time::SystemTime;
 use memsec::memzero;
 
+// Returns the largest twin prime (+-1) as well as the number of twin primes before 'max'
 pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
-    let now = SystemTime::now();
 
     //Initialize with precompiled data
     let num = (max - 1) | 1;
@@ -26,60 +25,59 @@ pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
     let (primes, p_cnt) =
         soz_pg(sqrt(num), modpg, res_cnt, &residues, pos.clone());
 
-    println!("setup time: {}ms", {
-        match now.elapsed() {
-            Ok(elapsed) => {
-                (elapsed.as_secs() * 1000) as f64 + elapsed.subsec_nanos() as f64 / 1_000_000f64},
-            Err(e) => {panic!("Timer error {:?}", e)},
-        }
-    });
 
-
-    let now = SystemTime::now();
+    //Create a channel to send the results from the threads
     let (sender, receiver) = mpsc::channel();
 
     for index in 0..pairs_cnt {
+        //Clone the necessary data
         let (k_max_0, kb_0, r_hi, modpg_0, num_0, p_cnt_0,
             primes_0, res_inv_0, pos_0, sender_0) =
             (k_max, kb, res_twins[index], modpg, num, p_cnt,
              primes.clone(), res_inv.clone(), pos.clone(), sender.clone());
+        //Execute 'twin_sieve' in parallel, sending the results to the channel
         thread::spawn(move || {
             sender_0.send(twin_sieve(k_max_0, kb_0, r_hi, modpg_0,
                              num_0, p_cnt_0, primes_0, res_inv_0, pos_0))
                 .expect("Unable to send to channel");
         });
     }
+
+    //Collect the results from the channel, as they finish
     let mut last = 0usize;
     for _ in 0..pairs_cnt {
         let (l, c) = receiver.recv().expect("Unable to receive from channel");
         twins_cnt += c;
         if l > last {last = l;}
     }
-    println!("sieve time: {}ms", {
-        match now.elapsed() {
-            Ok(elapsed) => {
-                (elapsed.as_secs() * 1000) as f64 + elapsed.subsec_nanos() as f64 / 1_000_000f64},
-            Err(e) => {panic!("Timer error {:?}", e)},
-        }
-    });
-    (last, twins_cnt)
+    (last - 1, twins_cnt)
 }
 
+// Perform in a thread, the ssoz for a given twin pair, for k_max resgroups.
+// First create|init 'next_p' array of 1st prime mults for given twin pair and
+// its seg array of KB bytes, which will be gc'd|recovered at end of thread.
+// For sieve, mark seg byte to '1' if either twin pair restrack is nonprime,
+// for primes mults resgroups, update 'next_p' restrack slices accordingly.
+// Then find last twinprime|sum <= num, return it with the total number of twin primes found.
 fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_cnt: usize,
               primes: Arc<Vec<usize>>, res_inv: Arc<Vec<usize>>, pos: Arc<Vec<usize>>) -> (usize, usize) {
-    let (mut sum, mut ki) = (0usize, 0usize);
+    //Initialize variables
+    let (mut sum, mut ki, mut kn) = (0usize, 0usize, kb);
     let (mut hi_tp, mut upk) = (0usize, 0usize);
     let mut k_hi = 0usize;
-    let mut seg= vec![0u8;kb];
+    let mut seg = vec![0u8;kb];
     let mut next_p =
         next_p_init(r_hi, modpg, primes.clone(),p_cnt, res_inv.clone(), pos.clone());
 
+    //Consider all resgroup size slices up to k_max
     while ki < k_max {
-        let kn = {if kb < (k_max - ki) {kb} else {k_max - ki}};
+        if kb > (k_max - ki) {kn = k_max - ki;}
         unsafe {
             memzero(seg.as_mut_ptr(), kn);
         }
+        //For each prime, mark the multiples of the twin pair
         for (i, &prime) in primes.iter().enumerate() {
+            //lower twin
             let mut k = next_p[i];
             while k < kn {
                 seg[k] |= 1;
@@ -87,6 +85,7 @@ fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_
             }
             next_p[i] = k - kn;
 
+            //higher twin
             k = next_p[p_cnt + i];
             while k < kn {
                 seg[k] |= 1;
@@ -95,11 +94,14 @@ fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_
             next_p[i + p_cnt] = k - kn;
         }
 
+        //count the number of twins found
         let mut cnt = 0usize;
         seg.iter().take(kn).for_each(|&x| if x == 0 {cnt += 1});
 
+        //Add the number of twin primes found to the local counter 'sum'
         if cnt > 0 {
             sum += cnt;
+            // Save the location of the largest prime
             for k in 1..=kn {
                 if seg[kn - k] == 0 {
                     upk = kn - k;
@@ -112,6 +114,8 @@ fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_
         ki += kb;
     }
     hi_tp = hi_tp * modpg + r_hi;
+
+    //Remove extra primes calculated in the last segment
     if hi_tp > num {
         let mut prev = true;
         for k in 0..upk + 1 {
@@ -128,11 +132,14 @@ fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_
     (hi_tp, sum)
 }
 
+// Initialize 'next_p' array for given twin pair in res_twins.
+// Set each row[j] w/1st prime multiple resgroup for each prime r1..sqrt(N).
 fn next_p_init(r_hi: usize, modpg: usize, primes: Arc<Vec<usize>>, p_cnt: usize,
                res_inv: Arc<Vec<usize>>, pos: Arc<Vec<usize>>) -> Vec<usize> {
     let mut next_p = vec![0usize; p_cnt * 2];
     let r_lo = r_hi - 2;
     let (row_lo, row_hi) = (0usize, p_cnt);
+
     for (i, prime) in primes.iter().enumerate() {
         let k = (prime - 2) / modpg;
         let r = (prime - 2) % modpg + 2;
@@ -145,6 +152,7 @@ fn next_p_init(r_hi: usize, modpg: usize, primes: Arc<Vec<usize>>, p_cnt: usize,
     return next_p;
 }
 
+//Selects the desired precompiled data which matches the sieve limit
 fn select_pg(num: usize) -> (usize, usize, usize, usize, Vec<usize>, Vec<usize>, Arc<Vec<usize>>) {
     if num < 10_000_000usize {
          return (PARAMETERS_P5.0 , PARAMETERS_P5.1, PARAMETERS_P5.2, 16, PARAMETERS_P5.3.to_vec(),
@@ -170,6 +178,8 @@ fn select_pg(num: usize) -> (usize, usize, usize, usize, Vec<usize>, Vec<usize>,
             PARAMETERS_P17.4.to_vec(), Arc::new(PARAMETERS_P17.5.to_vec()));
 }
 
+//Computes the primes in r1..sqrt(val) - any algorithm can be used (fast|small)
+//Here the SoZ for PG is used
 fn soz_pg(val: usize, md: usize, res_cnt: usize, residues: &Vec<usize>, pos: Arc<Vec<usize>>)
     -> (Arc<Vec<usize>>, usize) {
 
@@ -188,6 +198,7 @@ fn soz_pg(val: usize, md: usize, res_cnt: usize, residues: &Vec<usize>, pos: Arc
 
     mod_k = 0; r = 0; k = 0;
 
+    //For each prime, mark its multiples
     for i in 0usize..max_pcs {
         if r == res_cnt {
             r = 0;
@@ -200,6 +211,7 @@ fn soz_pg(val: usize, md: usize, res_cnt: usize, residues: &Vec<usize>, pos: Arc
         if prime > sqn {break;}
         let prm_step = prime * (res_cnt);
         for ri in residues {
+            //compute resgroup val of 1st prime multiple, then mark all prime multiples up to end of prms
             let prod = pmr_r * ri - 2;
             let mut prm_mult = (k * (prime + ri) + prod / md) * res_cnt + pos[prod % md];
             while prm_mult < max_pcs {
@@ -210,6 +222,7 @@ fn soz_pg(val: usize, md: usize, res_cnt: usize, residues: &Vec<usize>, pos: Arc
         r += 1;
     }
 
+    //Extract the primes from prms
     mod_k = 0; r = 0;
     for prm in primes {
         if r == res_cnt{

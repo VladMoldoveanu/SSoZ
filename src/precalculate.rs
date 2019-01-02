@@ -1,6 +1,7 @@
 use num::integer::gcd;
 use std::mem::swap;
 
+//Simple modular inverse
 fn _mod_inverse(a0 : u64, b0: u64) -> u64 {
     if b0 == 1 {
         return 1;
@@ -22,6 +23,9 @@ fn _mod_inverse(a0 : u64, b0: u64) -> u64 {
     }
     return result as u64;
 }
+
+//Generate parameters at "compile time"
+//(i.e. write to file and paste to 'precalculated_values.rs'
 pub fn _gen_pg_parameters(prime: u64) -> String {
     println!("Generating pg parameters for prime: {}", prime);
     let primes = vec![2u64, 3, 5, 7, 11, 13, 17, 19, 23];
