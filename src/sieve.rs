@@ -63,13 +63,13 @@ fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_
               primes: Arc<Vec<usize>>, res_inv: Arc<Vec<usize>>, pos: Arc<Vec<usize>>) -> (usize, usize) {
     //Initialize variables
     let (mut sum, mut ki, mut kn) = (0usize, 0usize, kb);
-    let (mut hi_tp, mut upk) = (0usize, 0usize);
-    let mut k_hi = 0usize;
+    let (mut hi_tp, mut upk, mut k_max) = (0usize, 0usize, k_max);
     let mut seg = vec![0u8;kb];
     let mut next_p =
         next_p_init(r_hi, modpg, primes.clone(),p_cnt, res_inv.clone(), pos.clone());
 
     //Consider all resgroup size slices up to k_max
+    if (k_max - 1) * modpg + r_hi > num {k_max -= 1}
     while ki < k_max {
         if kb > (k_max - ki) {kn = k_max - ki;}
         unsafe {
@@ -102,33 +102,14 @@ fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_
         if cnt > 0 {
             sum += cnt;
             // Save the location of the largest prime
-            for k in 1..=kn {
-                if seg[kn - k] == 0 {
-                    upk = kn - k;
-                    break;
-                }
-            }
-            k_hi = hi_tp;
+            upk = kn - 1;
+            while seg[upk] == 1 {upk -= 1}
             hi_tp = ki + upk;
         }
         ki += kb;
     }
-    hi_tp = hi_tp * modpg + r_hi;
-
-    //Remove extra primes calculated in the last segment
-    if hi_tp > num {
-        let mut prev = true;
-        for k in 0..upk + 1 {
-            if seg[upk - k] == 0 {
-                if hi_tp <= num {prev = false; break;}
-                sum -= 1;
-            }
-            hi_tp -= modpg;
-        }
-        if prev {
-            hi_tp = if r_hi > num {0usize} else {k_hi * modpg + r_hi};
-        }
-    }
+    //Numerate largest twin prime for thread
+    hi_tp = if r_hi > num {0usize} else {hi_tp * modpg + r_hi};
     (hi_tp, sum)
 }
 
