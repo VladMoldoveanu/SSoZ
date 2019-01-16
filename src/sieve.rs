@@ -12,9 +12,7 @@ pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
     let (modpg, res_cnt, pairs_cnt, bn
         , residues, res_twins, res_inv) = select_pg(num);
     let mut pos = vec![0usize; modpg];
-    for i in 0..res_cnt {
-        pos[residues[i] - 2] = i;
-    }
+    for i in 0..res_cnt {pos[residues[i] - 2] = i;}
     let pos = Arc::new(pos);
 
     let k_max = (num - 2) / modpg + 1;
@@ -22,9 +20,7 @@ pub fn largest_twin_prime_before(max : usize) -> (usize, usize) {
     let kb = if k_max < b {k_max} else {b};
     let mut twins_cnt = if modpg > 30030usize {4usize} else if modpg > 210usize {3usize} else {2usize};
 
-    let (primes, p_cnt) =
-        soz_pg(sqrt(num), modpg, res_cnt, &residues, pos.clone());
-
+    let (primes, p_cnt) = soz_pg(sqrt(num), &residues);
 
     //Create a channel to send the results from the threads
     let (sender, receiver) = mpsc::channel();
@@ -72,9 +68,7 @@ fn twin_sieve(k_max: usize, kb: usize, r_hi: usize, modpg: usize, num: usize, p_
     if (k_max - 1) * modpg + r_hi > num {k_max -= 1}
     while ki < k_max {
         if kb > (k_max - ki) {kn = k_max - ki;}
-        unsafe {
-            memzero(seg.as_mut_ptr(), kn);
-        }
+        unsafe {memzero(seg.as_mut_ptr(), kn);}
         //For each prime, mark the multiples of the twin pair
         for (i, &prime) in primes.iter().enumerate() {
             //lower twin
@@ -160,9 +154,13 @@ fn select_pg(num: usize) -> (usize, usize, usize, usize, Vec<usize>, Vec<usize>,
 }
 
 //Computes the primes in r1..sqrt(val) - any algorithm can be used (fast|small)
-//Here the SoZ for PG is used
-fn soz_pg(val: usize, md: usize, res_cnt: usize, residues: &Vec<usize>, pos: Arc<Vec<usize>>)
-    -> (Arc<Vec<usize>>, usize) {
+//Here the SoZ for P5 is used, 'residues' is for selected PG (only need 'residues[0]')
+fn soz_pg(val: usize, residues: &Vec<usize>) -> (Arc<Vec<usize>>, usize) {
+    //Create parameters for P5
+    let md = 30;
+    let res_cnt = 8;
+    let res: [usize, 8] = [7,11,13,17,19,23,29,31];
+    let posn: [usize; 30] = [0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,3,0,4,0,0,0,5,0,0,0,0,0,6,0,7];
 
     let num = (val - 1) | 1;
     let mut k = num / md;
@@ -170,9 +168,7 @@ fn soz_pg(val: usize, md: usize, res_cnt: usize, residues: &Vec<usize>, pos: Arc
     let mut r = 0usize;
 
     let mut prms = Vec::new();
-    while num >= mod_k + residues[r] {
-        r += 1;
-    }
+    while num >= mod_k + res[r] {r += 1;}
     let max_pcs = k * res_cnt + r;
     let mut primes = vec![false; max_pcs];
     let sqn = sqrt(num);
@@ -181,40 +177,29 @@ fn soz_pg(val: usize, md: usize, res_cnt: usize, residues: &Vec<usize>, pos: Arc
 
     //For each prime, mark its multiples
     for i in 0usize..max_pcs {
-        if r == res_cnt {
-            r = 0;
-            mod_k += md;
-            k += 1;
-        }
+        if r == res_cnt {r = 0; mod_k += md; k += 1;}
         if primes[i] {r += 1; continue;}
-        let pmr_r = residues[i];
+        let pmr_r = res[i];
         let prime = mod_k + pmr_r;
         if prime > sqn {break;}
-        let prm_step = prime * (res_cnt);
-        for ri in residues {
+        let prm_step = prime * res_cnt;
+        for ri in res {
             //compute resgroup val of 1st prime multiple, then mark all prime multiples up to end of prms
             let prod = pmr_r * ri - 2;
-            let mut prm_mult = (k * (prime + ri) + prod / md) * res_cnt + pos[prod % md];
-            while prm_mult < max_pcs {
-                primes[prm_mult] = true;
-                prm_mult += prm_step;
-            }
+            let mut prm_mult = (k * (prime + ri) + prod / md) * res_cnt + posn[prod % md];
+            while prm_mult < max_pcs {primes[prm_mult] = true; prm_mult += prm_step;}
         }
         r += 1;
     }
-
     //Extract the primes from prms
     mod_k = 0; r = 0;
     for prm in primes {
-        if r == res_cnt{
-            r = 0;
-            mod_k += md;
-        }
-        if !prm {
-            prms.push(mod_k + residues[r]);
-        }
+        if r == res_cnt {r = 0; mod_k += md;}
+        if !prm {prms.push(mod_k + res[r]);}
         r += 1;
     }
+    //Discard in prms any of modpg's base primes for selected PG
+    while prms[0] < residues[0] {prms.remove(0);}
     let len = prms.len();
     (Arc::new(prms), len)
 }
